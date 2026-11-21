@@ -289,8 +289,8 @@ describe("timeline groups", () => {
   const today = day("2025-12-01");
   const data = makeData({
     groups: [
-      { id: "g1", name: "Design" },
-      { id: "g2", name: "Empty group" },
+      { id: "g1", name: "Design", color: "violet" },
+      { id: "g2", name: "Empty group", color: "orange" },
     ],
     tasks: [
       makeTask({ id: "a", name: "In group A", groupId: "g1", duration: 2 }),
@@ -320,25 +320,43 @@ describe("timeline groups", () => {
     ]);
   });
 
-  it("draws group names and a summary bar spanning the group's tasks", () => {
+  it("draws each group as a lane with a colored border around its tasks", () => {
     const elements = renderTimeline(data, 0, 0, { today })!;
-    const range = getTimelineRange(data, today)!;
-    const dayWidth = TIMELINE_LAYOUT.dayWidth.weeks;
+    const L = TIMELINE_LAYOUT;
     for (const name of ["Design", "Empty group"]) {
       expect(
         elements.some((el) => el.type === "text" && el.text === name),
       ).toBe(true);
     }
-    // the summary bar: dark and thin, from Mon 15th to the end of Wed 24th
-    const summary = elements.filter(
-      (el) => el.type === "rectangle" && el.height === 8,
+    const lanes = elements.filter((el) => el.customData?.timelineLane);
+    expect(lanes.map((lane) => lane.customData!.timelineLane)).toEqual([
+      "g1",
+      "g2",
+    ]);
+    // violet border, wide as the timeline
+    expect(lanes[0].strokeColor).toBe("#7950f2");
+    expect(lanes[0].strokeWidth).toBe(2);
+    expect(lanes[0].width).toBe(elements[0].width - 12);
+    // the "Design" lane holds its header row and its 2 tasks
+    expect(lanes[0].height).toBe(L.groupRowHeight + 2 * L.rowHeight - 6);
+    // the empty group's lane is just its header row
+    expect(lanes[1].height).toBe(L.groupRowHeight - 6);
+    // the lane starts below the "No group" task row
+    expect(lanes[0].y).toBe(
+      L.headerHeight + L.milestoneRowHeight + L.rowHeight + 3,
     );
-    expect(summary).toHaveLength(1);
-    expect(summary[0].x).toBe(
-      TIMELINE_LAYOUT.nameColumnWidth +
-        (day("2025-12-15") - range.start) * dayWidth,
-    );
-    expect(summary[0].width).toBe(10 * dayWidth);
+    // no dark summary bars any more
+    expect(
+      elements.some((el) => el.type === "rectangle" && el.height === 8),
+    ).toBe(false);
+  });
+
+  it("gives old groups without a color one automatically", () => {
+    const upgraded = normalizeTimelineData({
+      ...data,
+      groups: [{ id: "g1", name: "Old" }],
+    });
+    expect(upgraded.groups[0].color).toBe("violet");
   });
 
   it("treats a task whose group was deleted as having no group", () => {

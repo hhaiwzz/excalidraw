@@ -39,6 +39,7 @@ import {
 import { TIMELINE_COLORS, TIMELINE_HOURS_PER_DAY } from "./timeline.types";
 
 import type {
+  TimelineColor,
   TimelineData,
   TimelineGroup,
   TimelineMilestone,
@@ -75,8 +76,6 @@ const MUTED_TEXT_COLOR = COLOR_PALETTE.gray[3];
 const GRID_COLOR = COLOR_PALETTE.gray[2];
 const SHADE_COLOR = COLOR_PALETTE.gray[0];
 const MILESTONE_COLOR = COLOR_PALETTE.blue[3];
-const GROUP_ROW_COLOR = COLOR_PALETTE.gray[1];
-const GROUP_BAR_COLOR = COLOR_PALETTE.gray[4];
 const TODAY_COLOR = COLOR_PALETTE.red[3];
 
 // -----------------------------------------------------------------------------
@@ -371,6 +370,7 @@ export const renderTimeline = (
 
   const background: ExcalidrawElement[] = [];
   const grid: ExcalidrawElement[] = [];
+  const dividers: ExcalidrawElement[] = [];
   const labels: ExcalidrawElement[] = [];
   const bars: ExcalidrawElement[] = [];
   const markers: ExcalidrawElement[] = [];
@@ -424,7 +424,7 @@ export const renderTimeline = (
 
   // header and dividers -----------------------------------------------------
 
-  grid.push(
+  dividers.push(
     makeLine(style, {
       x,
       y: bodyY,
@@ -560,20 +560,36 @@ export const renderTimeline = (
     rowTop += rowHeight;
 
     if (row.kind === "group") {
-      // a light band across the whole row, the group's name, and a thin bar
-      // that spans from its first task's start to its last task's end
+      // a "lane": a box with a colored border around the group's name and
+      // all of its tasks, stretching across the whole timeline
+      const shades = COLOR_PALETTE[row.group.color] ?? COLOR_PALETTE.gray;
+      const laneTop = rowCenterY - rowHeight / 2 + 3;
+      const laneHeight = rowHeight + row.tasks.length * L.rowHeight - 6;
       groupBands.push(
         newElement({
           ...baseProps(style),
           type: "rectangle",
-          x: x + 1,
-          y: rowCenterY - rowHeight / 2 + 2,
-          width: width - 2,
-          height: rowHeight - 4,
+          x: x + 6,
+          y: laneTop,
+          width: width - 12,
+          height: laneHeight,
           strokeColor: "transparent",
-          backgroundColor: GROUP_ROW_COLOR,
-          opacity: 60,
-          roundness: null,
+          backgroundColor: shades[0],
+          opacity: 70,
+          roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+        }),
+        newElement({
+          ...baseProps(style),
+          type: "rectangle",
+          x: x + 6,
+          y: laneTop,
+          width: width - 12,
+          height: laneHeight,
+          strokeColor: shades[3],
+          strokeWidth: 2,
+          backgroundColor: "transparent",
+          roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+          customData: { timelineLane: row.group.id },
         }),
       );
       labels.push(
@@ -588,29 +604,10 @@ export const renderTimeline = (
           x: x + 16,
           y: rowCenterY,
           fontSize: FONT_SIZE.title,
+          color: shades[4],
           renderEnvironment,
         }),
       );
-      const schedules = row.tasks
-        .map(getTaskSchedule)
-        .filter((schedule): schedule is TaskSchedule => !!schedule);
-      if (schedules.length) {
-        const start = Math.min(...schedules.map((s) => s.start));
-        const end = Math.max(...schedules.map((s) => s.end));
-        bars.push(
-          newElement({
-            ...baseProps(style),
-            type: "rectangle",
-            x: dayX(start),
-            y: rowCenterY - 4,
-            width: Math.max(2, (end - start) * dayWidth),
-            height: 8,
-            strokeColor: GROUP_BAR_COLOR,
-            backgroundColor: GROUP_BAR_COLOR,
-            roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
-          }),
-        );
-      }
       return;
     }
 
@@ -731,6 +728,7 @@ export const renderTimeline = (
     ...background,
     ...grid,
     ...groupBands,
+    ...dividers,
     ...labels,
     ...markerLines,
     ...bars,
@@ -906,7 +904,13 @@ export const normalizeTimelineData = (raw: any): TimelineData => {
   const groups: TimelineGroup[] = Array.isArray(raw.groups)
     ? raw.groups
         .filter((group: any) => group && typeof group.id === "string")
-        .map((group: any) => ({ id: group.id, name: String(group.name ?? "") }))
+        .map((group: any, index: number) => ({
+          id: group.id,
+          name: String(group.name ?? ""),
+          color: TIMELINE_COLORS.includes(group.color)
+            ? group.color
+            : getDefaultGroupColor(index),
+        }))
     : [];
   const groupIds = new Set(groups.map((group) => group.id));
 
@@ -991,10 +995,33 @@ export const findSelectedTimeline = (
   return null;
 };
 
+/** a different color for each new group: violet, orange, cyan, red, ... */
+export const getDefaultGroupColor = (index: number): TimelineColor => {
+  const order: TimelineColor[] = [
+    "violet",
+    "orange",
+    "cyan",
+    "red",
+    "green",
+    "blue",
+    "yellow",
+    "gray",
+  ];
+  return order[index % order.length];
+};
+
 export const createDefaultTimelineData = (today: number): TimelineData => {
   const monday = startOfWeek(today);
-  const planning = { id: randomId(), name: "Planning" };
-  const delivery = { id: randomId(), name: "Delivery" };
+  const planning: TimelineGroup = {
+    id: randomId(),
+    name: "Planning",
+    color: "violet",
+  };
+  const delivery: TimelineGroup = {
+    id: randomId(),
+    name: "Delivery",
+    color: "orange",
+  };
   return {
     scale: "weeks",
     showToday: true,

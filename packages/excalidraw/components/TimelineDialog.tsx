@@ -17,6 +17,7 @@ import {
   findSelectedTimeline,
   formatDay,
   formatDayForDisplay,
+  getDefaultGroupColor,
   getTaskProblem,
   getTaskSchedule,
   getTimelineRange,
@@ -194,10 +195,24 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
     });
 
   const addGroup = () =>
-    setData((prev) => ({
-      ...prev,
-      groups: [...prev.groups, { id: randomId(), name: "" }],
-    }));
+    setData((prev) => {
+      // pick the first lane color no other group uses yet
+      const used = new Set(prev.groups.map((group) => group.color));
+      let index = prev.groups.length;
+      for (let i = 0; i < TIMELINE_COLORS.length; i++) {
+        if (!used.has(getDefaultGroupColor(i))) {
+          index = i;
+          break;
+        }
+      }
+      return {
+        ...prev,
+        groups: [
+          ...prev.groups,
+          { id: randomId(), name: "", color: getDefaultGroupColor(index) },
+        ],
+      };
+    });
 
   const updateGroup = (id: string, patch: Partial<TimelineGroup>) =>
     setData((prev) => ({
@@ -342,9 +357,9 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
                 className="TimelineDialog__row TimelineDialog__row--group"
                 data-testid={`timeline-group-${index}`}
               >
-                <span
-                  className="TimelineDialog__groupIcon"
-                  aria-hidden="true"
+                <ColorSelect
+                  value={group.color}
+                  onChange={(color) => updateGroup(group.id, { color })}
                 />
                 <input
                   type="text"

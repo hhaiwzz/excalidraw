@@ -40,10 +40,12 @@ export type TimelineTask = {
   tag: string;
 };
 
-/** A named set of tasks, shown as a header row above its tasks. */
+/** A named set of tasks, drawn as a lane with a colored border. */
 export type TimelineGroup = {
   id: string;
   name: string;
+  /** the color of the lane's border */
+  color: TimelineColor;
 };
 
 /** A single important day, drawn as a diamond with a dashed line. */
