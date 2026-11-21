@@ -15,7 +15,8 @@ import {
 } from "../timeline";
 
 import { API } from "./helpers/api";
-import { act, fireEvent, render, waitFor } from "./test-utils";
+import { UI } from "./helpers/ui";
+import { act, fireEvent, GlobalTestState, render, waitFor } from "./test-utils";
 
 import type { TimelineData } from "../timeline";
 
@@ -309,5 +310,73 @@ describe("timeline dialog", () => {
         .filter((el) => !el.isDeleted)
         .every((el) => !el.groupIds.includes(first.groupIds[0])),
     ).toBe(true);
+  });
+});
+
+describe("timeline right-click menu", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    await render(<Excalidraw />);
+  });
+
+  const rightClick = (x: number, y: number) =>
+    fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
+      button: 2,
+      clientX: x,
+      clientY: y,
+    });
+
+  it("offers 'Edit timeline' and opens the dialog in edit mode", async () => {
+    const elements = renderTimeline(makeData(), 0, 0, {
+      today: day("2025-12-01"),
+    })!;
+    API.setElements(elements);
+
+    rightClick(50, 50);
+    const contextMenu = UI.queryContextMenu()!;
+    expect(contextMenu).not.toBeNull();
+    const item = contextMenu.querySelector<HTMLElement>(
+      "[data-testid='editTimeline']",
+    )!;
+    expect(item).not.toBeNull();
+    expect(item.textContent).toContain("Edit timeline");
+
+    await act(async () => {
+      fireEvent.click(item);
+    });
+
+    expect(h.state.openDialog).toEqual({ name: "timeline" });
+    const dialog = document.querySelector(".TimelineDialog")!;
+    expect(
+      Array.from(dialog.querySelectorAll("button")).some((button) =>
+        button.textContent?.includes("Update timeline"),
+      ),
+    ).toBe(true);
+    // the form is filled with the timeline's own tasks
+    expect(
+      dialog.querySelector<HTMLInputElement>(
+        "[data-testid='timeline-task-0'] .TimelineDialog__name",
+      )!.value,
+    ).toBe("Our second task");
+  });
+
+  it("doesn't offer 'Edit timeline' for other shapes", () => {
+    const rect = API.createElement({
+      type: "rectangle",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      backgroundColor: "red",
+      fillStyle: "solid",
+    });
+    API.setElements([rect]);
+
+    rightClick(50, 50);
+    const contextMenu = UI.queryContextMenu()!;
+    expect(contextMenu).not.toBeNull();
+    expect(
+      contextMenu.querySelector("[data-testid='editTimeline']"),
+    ).toBeNull();
   });
 });
