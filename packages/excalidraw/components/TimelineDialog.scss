@@ -65,12 +65,18 @@
 
     &__row {
       display: grid;
-      grid-template-columns: 1.75rem minmax(8rem, 1fr) 9.5rem 9.5rem 8rem 2rem;
+      grid-template-columns:
+        1.75rem minmax(7rem, 1fr) 8rem 9.5rem 9rem 7rem
+        2rem;
       align-items: center;
       gap: 0.5rem;
 
       &--milestone {
         grid-template-columns: 1.75rem minmax(8rem, 1fr) 9.5rem 2rem;
+      }
+
+      &--group {
+        grid-template-columns: 1.75rem minmax(8rem, 1fr) 2rem;
       }
 
       @include isMobile {
@@ -81,7 +87,8 @@
         }
       }
 
-      input {
+      input,
+      select {
         min-width: 0;
         height: 2rem;
         box-sizing: border-box;
@@ -104,10 +111,49 @@
       }
     }
 
-    &__error {
+    &__error,
+    &__hint {
       grid-column: 2 / -1;
-      color: var(--color-danger, $color-red-6);
+      margin-top: -0.25rem;
       font-size: 0.75rem;
+    }
+
+    &__error {
+      color: var(--color-danger, $color-red-6);
+    }
+
+    &__hint {
+      color: var(--color-gray-60, $color-gray-6);
+    }
+
+    &__note {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--color-gray-60, $color-gray-6);
+    }
+
+    &__estimate {
+      display: flex;
+      gap: 0.25rem;
+      min-width: 0;
+
+      input {
+        width: 3.75rem;
+        flex: 0 0 auto;
+      }
+
+      select {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+    }
+
+    &__groupIcon {
+      justify-self: center;
+      width: 0.9rem;
+      height: 0.35rem;
+      border-radius: 2px;
+      background: $color-gray-6;
     }
 
     &__color {

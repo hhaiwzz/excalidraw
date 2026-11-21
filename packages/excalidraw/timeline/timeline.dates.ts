@@ -87,3 +87,32 @@ export const getMonthLabel = (dayNumber: number, withYear: boolean) => {
 
 export const getYear = (dayNumber: number) =>
   toDate(dayNumber).getUTCFullYear();
+
+/** e.g. "Fri, Dec 12" (in the browser's language) */
+export const formatDayForDisplay = (dayNumber: number) =>
+  toDate(dayNumber).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+
+/** the first weekday (Mon-Fri) on or after the given day */
+export const nextWorkday = (dayNumber: number) => {
+  let day = dayNumber;
+  while (isWeekend(day)) {
+    day++;
+  }
+  return day;
+};
+
+/** how many weekdays there are from `start` to `end`, both included */
+export const countWorkdays = (start: number, end: number) => {
+  let count = 0;
+  for (let day = start; day <= end; day++) {
+    if (!isWeekend(day)) {
+      count++;
+    }
+  }
+  return count;
+};
