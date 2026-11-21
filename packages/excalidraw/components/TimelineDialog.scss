@@ -1,0 +1,192 @@
+@use "../css/variables.module" as *;
+
+.excalidraw {
+  .TimelineDialog {
+    .Dialog__content {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    &__intro {
+      margin: 0;
+      color: var(--color-gray-60, $color-gray-6);
+      font-size: 0.875rem;
+    }
+
+    &__options {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    &__scale {
+      display: inline-flex;
+      padding: 2px;
+      border-radius: 8px;
+      background: var(--color-surface-low, var(--island-bg-color));
+      border: 1px solid var(--default-border-color);
+
+      button {
+        border: 0;
+        background: transparent;
+        color: var(--text-primary-color);
+        padding: 0.35rem 0.85rem;
+        border-radius: 6px;
+        font: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+
+        &.active {
+          background: var(--color-primary);
+          color: #fff;
+        }
+      }
+    }
+
+    &__section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+
+      h3 {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+    }
+
+    &__rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    &__row {
+      display: grid;
+      grid-template-columns: 1.75rem minmax(8rem, 1fr) 9.5rem 9.5rem 8rem 2rem;
+      align-items: center;
+      gap: 0.5rem;
+
+      &--milestone {
+        grid-template-columns: 1.75rem minmax(8rem, 1fr) 9.5rem 2rem;
+      }
+
+      @include isMobile {
+        grid-template-columns: 1.75rem 1fr 1fr 2rem;
+
+        .TimelineDialog__name {
+          grid-column: span 3;
+        }
+      }
+
+      input {
+        min-width: 0;
+        height: 2rem;
+        box-sizing: border-box;
+        padding: 0 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--default-border-color);
+        background: var(--input-bg-color);
+        color: var(--text-primary-color);
+        font: inherit;
+        font-size: 0.875rem;
+
+        &:focus {
+          outline: none;
+          border-color: var(--color-primary);
+        }
+      }
+
+      &.has-error input[type="date"] {
+        border-color: var(--color-danger, $color-red-6);
+      }
+    }
+
+    &__error {
+      grid-column: 2 / -1;
+      color: var(--color-danger, $color-red-6);
+      font-size: 0.75rem;
+    }
+
+    &__color {
+      position: relative;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 6px;
+      border: 1px solid;
+      cursor: pointer;
+
+      select {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+    }
+
+    &__diamond {
+      justify-self: center;
+      width: 0.6rem;
+      height: 0.6rem;
+      transform: rotate(45deg);
+      background: $color-blue-6;
+    }
+
+    &__remove,
+    &__add {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 0;
+      background: transparent;
+      color: var(--text-primary-color);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.875rem;
+      border-radius: 6px;
+
+      svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      &:hover {
+        background: var(--button-hover-bg, var(--color-surface-high));
+      }
+    }
+
+    &__remove {
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+    }
+
+    &__add {
+      align-self: flex-start;
+      padding: 0.35rem 0.5rem;
+      color: var(--color-primary);
+    }
+
+    &__preview {
+      border: 1px solid var(--default-border-color);
+      border-radius: 8px;
+      padding: 0.5rem;
+      overflow-x: auto;
+      background: var(--default-bg-color);
+      min-height: 6rem;
+
+      svg {
+        display: block;
+        max-width: none;
+        height: auto;
+      }
+    }
+
+    &__footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+  }
+}

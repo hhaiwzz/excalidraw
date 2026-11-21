@@ -49,6 +49,7 @@ import {
   bucketFillIcon,
   ExportImageIcon,
   mermaidLogoIcon,
+  timelineIcon,
   brainIconThin,
   LibraryIcon,
   historyCommandIcon,
@@ -590,6 +591,18 @@ function CommandPaletteInner({
                 name: "ttd",
                 tab: "mermaid",
               },
+            }));
+          },
+        },
+        {
+          label: `${t("toolBar.timeline")}...`,
+          category: DEFAULT_CATEGORIES.tools,
+          icon: timelineIcon,
+          viewMode: false,
+          perform: () => {
+            setAppState((state) => ({
+              ...state,
+              openDialog: { name: "timeline" },
             }));
           },
         },
