@@ -16,8 +16,13 @@ import {
   createDefaultTimelineData,
   findSelectedTimeline,
   formatDay,
+  formatDayForDisplay,
+  getDefaultGroupColor,
   getTaskProblem,
+  getTaskSchedule,
   getTimelineRange,
+  nextWorkday,
+  normalizeTimelineData,
   parseDay,
   renderTimeline,
   toDayNumber,
@@ -38,6 +43,8 @@ import type { TimelineLabels } from "../timeline";
 import type {
   TimelineColor,
   TimelineData,
+  TimelineDurationUnit,
+  TimelineGroup,
   TimelineMilestone,
   TimelineTask,
 } from "../timeline";
@@ -62,7 +69,11 @@ const loadSavedData = (): TimelineData | null => {
     Array.isArray((saved as any).tasks) &&
     Array.isArray((saved as any).milestones)
   ) {
-    return saved as unknown as TimelineData;
+    try {
+      return normalizeTimelineData(saved);
+    } catch {
+      return null;
+    }
   }
   return null;
 };
@@ -154,10 +165,13 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
 
   const addTask = () =>
     setData((prev) => {
-      // start the new task where the last one ends, so it's easy to chain
+      // start the new task on the workday after the last one ends, so it's
+      // easy to chain tasks; keep it in the same group as the last task
       const last = prev.tasks[prev.tasks.length - 1];
-      const lastEnd = last ? parseDay(last.end) : null;
-      const start = lastEnd !== null ? lastEnd + 1 : today;
+      const lastSchedule = last ? getTaskSchedule(last) : null;
+      const start = lastSchedule
+        ? nextWorkday(lastSchedule.lastDay + 1)
+        : nextWorkday(today);
       const usedColors = new Set(prev.tasks.map((task) => task.color));
       const color =
         TIMELINE_COLORS.find((c) => !usedColors.has(c)) ??
@@ -170,7 +184,9 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
             id: randomId(),
             name: "",
             start: formatDay(start),
-            end: formatDay(start + 6),
+            duration: 3,
+            durationUnit: "days",
+            groupId: last?.groupId ?? null,
             color,
             tag: "",
           },
@@ -178,10 +194,48 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
       };
     });
 
+  const addGroup = () =>
+    setData((prev) => {
+      // pick the first lane color no other group uses yet
+      const used = new Set(prev.groups.map((group) => group.color));
+      let index = prev.groups.length;
+      for (let i = 0; i < TIMELINE_COLORS.length; i++) {
+        if (!used.has(getDefaultGroupColor(i))) {
+          index = i;
+          break;
+        }
+      }
+      return {
+        ...prev,
+        groups: [
+          ...prev.groups,
+          { id: randomId(), name: "", color: getDefaultGroupColor(index) },
+        ],
+      };
+    });
+
+  const updateGroup = (id: string, patch: Partial<TimelineGroup>) =>
+    setData((prev) => ({
+      ...prev,
+      groups: prev.groups.map((group) =>
+        group.id === id ? { ...group, ...patch } : group,
+      ),
+    }));
+
+  // removing a group keeps its tasks; they just no longer have a group
+  const removeGroup = (id: string) =>
+    setData((prev) => ({
+      ...prev,
+      groups: prev.groups.filter((group) => group.id !== id),
+      tasks: prev.tasks.map((task) =>
+        task.groupId === id ? { ...task, groupId: null } : task,
+      ),
+    }));
+
   const addMilestone = () =>
     setData((prev) => {
       const days = prev.tasks
-        .map((task) => parseDay(task.end))
+        .map((task) => getTaskSchedule(task)?.lastDay ?? null)
         .filter((day): day is number => day !== null);
       const date = days.length ? Math.max(...days) : today;
       return {
@@ -294,10 +348,53 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
       </div>
 
       <section className="TimelineDialog__section">
+        <h3>{t("timelineDialog.groups")}</h3>
+        {data.groups.length > 0 && (
+          <div className="TimelineDialog__rows">
+            {data.groups.map((group, index) => (
+              <div
+                key={group.id}
+                className="TimelineDialog__row TimelineDialog__row--group"
+                data-testid={`timeline-group-${index}`}
+              >
+                <ColorSelect
+                  value={group.color}
+                  onChange={(color) => updateGroup(group.id, { color })}
+                />
+                <input
+                  type="text"
+                  className="TimelineDialog__name"
+                  placeholder={t("timelineDialog.groupName")}
+                  aria-label={t("timelineDialog.groupName")}
+                  value={group.name}
+                  onChange={(event) =>
+                    updateGroup(group.id, { name: event.target.value })
+                  }
+                />
+                <RemoveButton onClick={() => removeGroup(group.id)} />
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          className="TimelineDialog__add"
+          onClick={addGroup}
+          data-testid="timeline-add-group"
+        >
+          {PlusIcon} {t("timelineDialog.addGroup")}
+        </button>
+      </section>
+
+      <section className="TimelineDialog__section">
         <h3>{t("timelineDialog.tasks")}</h3>
+        <p className="TimelineDialog__note">
+          {t("timelineDialog.estimateNote")}
+        </p>
         <div className="TimelineDialog__rows">
           {data.tasks.map((task, index) => {
             const problem = getTaskProblem(task);
+            const schedule = getTaskSchedule(task);
             return (
               <div
                 key={task.id}
@@ -320,6 +417,27 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
                     updateTask(task.id, { name: event.target.value })
                   }
                 />
+                <select
+                  className="TimelineDialog__group"
+                  aria-label={t("timelineDialog.group")}
+                  title={t("timelineDialog.group")}
+                  value={task.groupId ?? ""}
+                  onChange={(event) =>
+                    updateTask(task.id, {
+                      groupId: event.target.value || null,
+                    })
+                  }
+                >
+                  <option value="">{t("timelineDialog.noGroup")}</option>
+                  {data.groups.map((group, groupIndex) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name.trim() ||
+                        t("timelineDialog.untitledGroup", {
+                          number: groupIndex + 1,
+                        })}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="date"
                   aria-label={t("timelineDialog.start")}
@@ -329,15 +447,36 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
                     updateTask(task.id, { start: event.target.value })
                   }
                 />
-                <input
-                  type="date"
-                  aria-label={t("timelineDialog.end")}
-                  title={t("timelineDialog.end")}
-                  value={task.end}
-                  onChange={(event) =>
-                    updateTask(task.id, { end: event.target.value })
-                  }
-                />
+                <div className="TimelineDialog__estimate">
+                  <input
+                    type="number"
+                    min={0}
+                    step={task.durationUnit === "hours" ? 1 : 0.5}
+                    aria-label={t("timelineDialog.estimate")}
+                    title={t("timelineDialog.estimate")}
+                    value={Number.isFinite(task.duration) ? task.duration : ""}
+                    onChange={(event) =>
+                      updateTask(task.id, {
+                        duration: parseFloat(event.target.value),
+                      })
+                    }
+                  />
+                  <select
+                    aria-label={t("timelineDialog.unit")}
+                    value={task.durationUnit}
+                    onChange={(event) =>
+                      updateTask(task.id, {
+                        durationUnit: event.target
+                          .value as TimelineDurationUnit,
+                      })
+                    }
+                  >
+                    <option value="hours">
+                      {t("timelineDialog.unitHours")}
+                    </option>
+                    <option value="days">{t("timelineDialog.unitDays")}</option>
+                  </select>
+                </div>
                 <input
                   type="text"
                   className="TimelineDialog__tag"
@@ -356,10 +495,21 @@ export const TimelineDialog = ({ onClose }: { onClose: () => void }) => {
                     }))
                   }
                 />
-                {problem && (
+                {problem ? (
                   <div className="TimelineDialog__error">
                     {t(`timelineDialog.${problem}`)}
                   </div>
+                ) : (
+                  schedule && (
+                    <div
+                      className="TimelineDialog__hint"
+                      data-testid={`timeline-ends-${index}`}
+                    >
+                      {t("timelineDialog.endsOn", {
+                        date: formatDayForDisplay(schedule.lastDay),
+                      })}
+                    </div>
+                  )
                 )}
               </div>
             );

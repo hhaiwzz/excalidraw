@@ -25,18 +25,23 @@ import type {
 } from "@excalidraw/element/types";
 
 import {
+  countWorkdays,
   formatDay,
   getDayOfMonth,
   getMonthLabel,
   getYear,
   isFirstOfMonth,
   isWeekend,
+  nextWorkday,
   parseDay,
   startOfWeek,
 } from "./timeline.dates";
+import { TIMELINE_COLORS, TIMELINE_HOURS_PER_DAY } from "./timeline.types";
 
 import type {
+  TimelineColor,
   TimelineData,
+  TimelineGroup,
   TimelineMilestone,
   TimelineScale,
   TimelineTask,
@@ -51,6 +56,21 @@ export const TIMELINE_LAYOUT = {
   headerHeight: 64,
   milestoneRowHeight: 44,
   rowHeight: 48,
+  groupRowHeight: 40,
+  /** how far task names inside a group are pushed right */
+  groupIndent: 16,
+  /** where names start, measured from the timeline's left edge */
+  textLeft: 24,
+  lane: {
+    /** empty space above each lane, so lanes don't touch */
+    gap: 14,
+    /** empty space inside a lane, below its last task */
+    paddingBottom: 10,
+    /** distance from the timeline's left and right edges */
+    insetX: 8,
+    /** small corner radius so the corner never runs into the text */
+    radius: 12,
+  },
   barHeight: 34,
   bottomPadding: 24,
   dayWidth: { weeks: 18, days: 44 } as Record<TimelineScale, number>,
@@ -74,28 +94,64 @@ const TODAY_COLOR = COLOR_PALETTE.red[3];
 // data helpers
 // -----------------------------------------------------------------------------
 
-export type TaskProblem = "missingDates" | "endBeforeStart" | null;
+/** the longest estimate we accept, in working days (about 3 years) */
+const MAX_WORKDAYS = 750;
+
+export type TaskProblem = "missingStart" | "invalidDuration" | null;
+
+const getWorkdays = (task: TimelineTask) =>
+  task.durationUnit === "hours"
+    ? task.duration / TIMELINE_HOURS_PER_DAY
+    : task.duration;
 
 export const getTaskProblem = (task: TimelineTask): TaskProblem => {
-  const start = parseDay(task.start);
-  const end = parseDay(task.end);
-  if (start === null || end === null) {
-    return "missingDates";
+  if (parseDay(task.start) === null) {
+    return "missingStart";
   }
-  if (end < start) {
-    return "endBeforeStart";
+  const workdays = getWorkdays(task);
+  if (!Number.isFinite(workdays) || workdays <= 0 || workdays > MAX_WORKDAYS) {
+    return "invalidDuration";
   }
   return null;
 };
 
-/** start/end day numbers of a task, or null if it has no valid dates */
-const getTaskDays = (task: TimelineTask) => {
-  const start = parseDay(task.start);
-  const end = parseDay(task.end);
-  if (start === null || end === null) {
+export type TaskSchedule = {
+  /** where the bar starts, as a day number */
+  start: number;
+  /**
+   * where the bar ends (exclusive). It can be a fraction: a 4 hour task
+   * that starts on day 10 ends at 10.5.
+   */
+  end: number;
+  /** the last day that has work on it */
+  lastDay: number;
+};
+
+/**
+ * Works out when a task really starts and ends, skipping weekends.
+ *
+ * Examples (8 working hours = 1 day):
+ * - 3 days from Thursday: Thu, Fri, (skip Sat, Sun), Mon -> ends Monday
+ * - 4 hours from Tuesday: half of Tuesday
+ * - 2 days from Saturday: moves to Monday, ends Tuesday
+ */
+export const getTaskSchedule = (task: TimelineTask): TaskSchedule | null => {
+  if (getTaskProblem(task)) {
     return null;
   }
-  return { start: Math.min(start, end), end: Math.max(start, end) };
+  const start = nextWorkday(parseDay(task.start)!);
+  let remaining = getWorkdays(task);
+  let day = start;
+  let end = start;
+  while (remaining > 1e-9) {
+    if (!isWeekend(day)) {
+      const work = Math.min(1, remaining);
+      remaining -= work;
+      end = day + work;
+    }
+    day++;
+  }
+  return { start, end, lastDay: Math.ceil(end) - 1 };
 };
 
 export type TimelineRange = {
@@ -116,9 +172,9 @@ export const getTimelineRange = (
 ): TimelineRange | null => {
   const days: number[] = [];
   for (const task of data.tasks) {
-    const taskDays = getTaskDays(task);
-    if (taskDays) {
-      days.push(taskDays.start, taskDays.end);
+    const schedule = getTaskSchedule(task);
+    if (schedule) {
+      days.push(schedule.start, schedule.lastDay);
     }
   }
   for (const milestone of data.milestones) {
@@ -247,13 +303,83 @@ const measureWidth = (
     renderEnvironment,
   ).width;
 
+type TimelineRow =
+  | { kind: "task"; task: TimelineTask; inGroup: boolean }
+  | { kind: "group"; group: TimelineGroup; tasks: TimelineTask[] };
+
+/**
+ * The order of rows on the left: tasks without a group first, then each
+ * group followed by its own tasks.
+ */
+export const getTimelineRows = (data: TimelineData): TimelineRow[] => {
+  const groupIds = new Set(data.groups.map((group) => group.id));
+  const rows: TimelineRow[] = data.tasks
+    .filter((task) => !task.groupId || !groupIds.has(task.groupId))
+    .map((task) => ({ kind: "task", task, inGroup: false }));
+  for (const group of data.groups) {
+    const tasks = data.tasks.filter((task) => task.groupId === group.id);
+    rows.push({ kind: "group", group, tasks });
+    for (const task of tasks) {
+      rows.push({ kind: "task", task, inGroup: true });
+    }
+  }
+  return rows;
+};
+
+/**
+ * Works out where each row sits (relative to the first row) and where each
+ * group's lane ends. Lanes get a gap above them and some padding below
+ * their last task, so groups never touch each other or nearby tasks.
+ */
+const layoutRows = (rows: TimelineRow[]) => {
+  const L = TIMELINE_LAYOUT;
+  const rowTops: number[] = [];
+  const rowHeights: number[] = [];
+  /** for group rows: where the lane ends; undefined for task rows */
+  const laneBottoms: (number | undefined)[] = [];
+  let cursor = 0;
+  let openLaneIndex: number | null = null;
+
+  const closeLane = () => {
+    if (openLaneIndex !== null) {
+      cursor += L.lane.paddingBottom;
+      laneBottoms[openLaneIndex] = cursor;
+      openLaneIndex = null;
+    }
+  };
+
+  rows.forEach((row, index) => {
+    if (row.kind === "group") {
+      closeLane();
+      cursor += L.lane.gap;
+      openLaneIndex = index;
+      rowTops.push(cursor);
+      rowHeights.push(L.groupRowHeight);
+      laneBottoms.push(undefined);
+      cursor += L.groupRowHeight;
+      return;
+    }
+    if (!row.inGroup) {
+      closeLane();
+    }
+    rowTops.push(cursor);
+    rowHeights.push(L.rowHeight);
+    laneBottoms.push(undefined);
+    cursor += L.rowHeight;
+  });
+  closeLane();
+
+  return { rowTops, rowHeights, laneBottoms, rowsHeight: cursor };
+};
+
 /**
  * Turns timeline data into plain Excalidraw elements (rectangles, text,
  * lines, diamonds) that are grouped together. Because they're normal
  * elements, people can move, resize, recolor or rename anything afterwards.
  *
- * Example: a task from 2025-12-15 to 2025-12-29 becomes a rounded rectangle
- * that starts at the "15" column and ends after the "29" column.
+ * Example: a 3 day task starting Thursday 2025-12-18 becomes a rounded
+ * rectangle from the "18" column to the end of Monday the 22nd (the weekend
+ * in between doesn't count as work, but the bar still spans it).
  */
 export const renderTimeline = (
   data: TimelineData,
@@ -288,15 +414,18 @@ export const renderTimeline = (
   const width = L.nameColumnWidth + gridWidth;
   const bodyY = y + L.headerHeight;
   const rowsY = bodyY + L.milestoneRowHeight;
+  const rows = getTimelineRows(data);
+  const { rowTops, rowHeights, laneBottoms, rowsHeight } = layoutRows(rows);
   const height =
     L.headerHeight +
     L.milestoneRowHeight +
-    Math.max(1, data.tasks.length) * L.rowHeight +
+    Math.max(L.rowHeight, rowsHeight) +
     L.bottomPadding;
   const dayX = (day: number) => gridX + (day - range.start) * dayWidth;
 
   const background: ExcalidrawElement[] = [];
   const grid: ExcalidrawElement[] = [];
+  const dividers: ExcalidrawElement[] = [];
   const labels: ExcalidrawElement[] = [];
   const bars: ExcalidrawElement[] = [];
   const markers: ExcalidrawElement[] = [];
@@ -350,7 +479,7 @@ export const renderTimeline = (
 
   // header and dividers -----------------------------------------------------
 
-  grid.push(
+  dividers.push(
     makeLine(style, {
       x,
       y: bodyY,
@@ -373,7 +502,7 @@ export const renderTimeline = (
   labels.push(
     makeText(style, {
       text: data.scale === "weeks" ? words.weeks : words.days,
-      x: x + 16,
+      x: x + L.textLeft,
       y: y + L.headerHeight / 2,
       fontSize: FONT_SIZE.label,
       color: MUTED_TEXT_COLOR,
@@ -470,7 +599,7 @@ export const renderTimeline = (
   labels.push(
     makeText(style, {
       text: words.taskCount(data.tasks.length),
-      x: x + 16,
+      x: x + L.textLeft,
       y: bodyY + L.milestoneRowHeight / 2,
       fontSize: FONT_SIZE.label,
       color: MUTED_TEXT_COLOR,
@@ -478,35 +607,97 @@ export const renderTimeline = (
     }),
   );
 
-  data.tasks.forEach((task, index) => {
-    const rowCenterY = rowsY + index * L.rowHeight + L.rowHeight / 2;
+  const groupBands: ExcalidrawElement[] = [];
+  rows.forEach((row, index) => {
+    const rowHeight = rowHeights[index];
+    const rowCenterY = rowsY + rowTops[index] + rowHeight / 2;
+
+    if (row.kind === "group") {
+      // a "lane": a box with a colored border around the group's name and
+      // all of its tasks, stretching across the whole timeline
+      const shades = COLOR_PALETTE[row.group.color] ?? COLOR_PALETTE.gray;
+      const laneTop = rowsY + rowTops[index];
+      const laneHeight = laneBottoms[index]! - rowTops[index];
+      const laneRoundness = {
+        type: ROUNDNESS.ADAPTIVE_RADIUS,
+        value: L.lane.radius,
+      };
+      groupBands.push(
+        newElement({
+          ...baseProps(style),
+          type: "rectangle",
+          x: x + L.lane.insetX,
+          y: laneTop,
+          width: width - L.lane.insetX * 2,
+          height: laneHeight,
+          strokeColor: "transparent",
+          backgroundColor: shades[0],
+          opacity: 70,
+          roundness: laneRoundness,
+        }),
+        newElement({
+          ...baseProps(style),
+          type: "rectangle",
+          x: x + L.lane.insetX,
+          y: laneTop,
+          width: width - L.lane.insetX * 2,
+          height: laneHeight,
+          strokeColor: shades[3],
+          strokeWidth: 2,
+          backgroundColor: "transparent",
+          roundness: laneRoundness,
+          customData: { timelineLane: row.group.id },
+        }),
+      );
+      labels.push(
+        makeText(style, {
+          text: truncate(
+            row.group.name.trim() || " ",
+            L.nameColumnWidth - L.textLeft - 16,
+            FONT_SIZE.title,
+            style.fontFamily,
+            renderEnvironment,
+          ),
+          x: x + L.textLeft,
+          y: rowCenterY,
+          fontSize: FONT_SIZE.title,
+          color: shades[4],
+          renderEnvironment,
+        }),
+      );
+      return;
+    }
+
+    const { task, inGroup } = row;
+    const indent = inGroup ? L.groupIndent : 0;
     if (task.name.trim()) {
       labels.push(
         makeText(style, {
           text: truncate(
             task.name.trim(),
-            L.nameColumnWidth - 32,
-            FONT_SIZE.title,
+            L.nameColumnWidth - L.textLeft - 16 - indent,
+            inGroup ? FONT_SIZE.label : FONT_SIZE.title,
             style.fontFamily,
             renderEnvironment,
           ),
-          x: x + 16,
+          x: x + L.textLeft + indent,
           y: rowCenterY,
-          fontSize: FONT_SIZE.title,
+          fontSize: inGroup ? FONT_SIZE.label : FONT_SIZE.title,
+          color: inGroup ? COLOR_PALETTE.gray[4] : TEXT_COLOR,
           renderEnvironment,
         }),
       );
     }
 
-    const days = getTaskDays(task);
-    if (!days) {
+    const schedule = getTaskSchedule(task);
+    if (!schedule) {
       return;
     }
     bars.push(
       ...renderBar(style, task, {
-        x: dayX(days.start),
+        x: dayX(schedule.start),
         y: rowCenterY - L.barHeight / 2,
-        width: (days.end - days.start + 1) * dayWidth,
+        width: Math.max(4, (schedule.end - schedule.start) * dayWidth),
         height: L.barHeight,
         renderEnvironment,
       }),
@@ -593,6 +784,8 @@ export const renderTimeline = (
   return [
     ...background,
     ...grid,
+    ...groupBands,
+    ...dividers,
     ...labels,
     ...markerLines,
     ...bars,
@@ -754,9 +947,73 @@ export const getTimelineData = (
     Array.isArray(value.tasks) &&
     Array.isArray(value.milestones)
   ) {
-    return value as TimelineData;
+    return normalizeTimelineData(value);
   }
   return null;
+};
+
+/**
+ * Fills in anything missing from older or hand-edited data. For example a
+ * task saved with an `end` date (before estimates existed) gets its
+ * estimate from the number of weekdays between start and end.
+ */
+export const normalizeTimelineData = (raw: any): TimelineData => {
+  const groups: TimelineGroup[] = Array.isArray(raw.groups)
+    ? raw.groups
+        .filter((group: any) => group && typeof group.id === "string")
+        .map((group: any, index: number) => ({
+          id: group.id,
+          name: String(group.name ?? ""),
+          color: TIMELINE_COLORS.includes(group.color)
+            ? group.color
+            : getDefaultGroupColor(index),
+        }))
+    : [];
+  const groupIds = new Set(groups.map((group) => group.id));
+
+  const tasks: TimelineTask[] = (raw.tasks as any[])
+    .filter((task) => task && typeof task === "object")
+    .map((task) => {
+      let duration = Number(task.duration);
+      let durationUnit = task.durationUnit === "hours" ? "hours" : "days";
+      if (!(duration > 0)) {
+        const start = parseDay(task.start);
+        const end = parseDay(task.end);
+        duration =
+          start !== null && end !== null && end >= start
+            ? Math.max(1, countWorkdays(start, end))
+            : 1;
+        durationUnit = "days";
+      }
+      return {
+        id: typeof task.id === "string" ? task.id : randomId(),
+        name: String(task.name ?? ""),
+        start: String(task.start ?? ""),
+        duration,
+        durationUnit,
+        groupId:
+          typeof task.groupId === "string" && groupIds.has(task.groupId)
+            ? task.groupId
+            : null,
+        color: TIMELINE_COLORS.includes(task.color) ? task.color : "yellow",
+        tag: String(task.tag ?? ""),
+      } as TimelineTask;
+    });
+
+  return {
+    scale: raw.scale === "days" ? "days" : "weeks",
+    showToday: raw.showToday !== false,
+    sketchy: !!raw.sketchy,
+    groups,
+    tasks,
+    milestones: (raw.milestones as any[])
+      .filter((milestone) => milestone && typeof milestone === "object")
+      .map((milestone) => ({
+        id: typeof milestone.id === "string" ? milestone.id : randomId(),
+        name: String(milestone.name ?? ""),
+        date: String(milestone.date ?? ""),
+      })),
+  };
 };
 
 /**
@@ -795,18 +1052,56 @@ export const findSelectedTimeline = (
   return null;
 };
 
+/** a different color for each new group: violet, orange, cyan, red, ... */
+export const getDefaultGroupColor = (index: number): TimelineColor => {
+  const order: TimelineColor[] = [
+    "violet",
+    "orange",
+    "cyan",
+    "red",
+    "green",
+    "blue",
+    "yellow",
+    "gray",
+  ];
+  return order[index % order.length];
+};
+
 export const createDefaultTimelineData = (today: number): TimelineData => {
   const monday = startOfWeek(today);
+  const planning: TimelineGroup = {
+    id: randomId(),
+    name: "Planning",
+    color: "violet",
+  };
+  const delivery: TimelineGroup = {
+    id: randomId(),
+    name: "Delivery",
+    color: "orange",
+  };
   return {
     scale: "weeks",
     showToday: true,
     sketchy: false,
+    groups: [planning, delivery],
     tasks: [
+      {
+        id: randomId(),
+        name: "Kickoff",
+        start: formatDay(monday),
+        duration: 4,
+        durationUnit: "hours",
+        groupId: null,
+        color: "violet",
+        tag: "",
+      },
       {
         id: randomId(),
         name: "Research",
         start: formatDay(monday),
-        end: formatDay(monday + 11),
+        duration: 5,
+        durationUnit: "days",
+        groupId: planning.id,
         color: "blue",
         tag: "",
       },
@@ -814,7 +1109,9 @@ export const createDefaultTimelineData = (today: number): TimelineData => {
         id: randomId(),
         name: "Design",
         start: formatDay(monday + 7),
-        end: formatDay(monday + 20),
+        duration: 8,
+        durationUnit: "days",
+        groupId: planning.id,
         color: "yellow",
         tag: "Design team",
       },
@@ -822,7 +1119,9 @@ export const createDefaultTimelineData = (today: number): TimelineData => {
         id: randomId(),
         name: "Build",
         start: formatDay(monday + 14),
-        end: formatDay(monday + 34),
+        duration: 15,
+        durationUnit: "days",
+        groupId: delivery.id,
         color: "green",
         tag: "",
       },

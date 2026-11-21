@@ -6,8 +6,11 @@ import {
   findSelectedTimeline,
   formatDay,
   getTaskProblem,
+  getTaskSchedule,
   getTimelineData,
   getTimelineRange,
+  getTimelineRows,
+  normalizeTimelineData,
   parseDay,
   renderTimeline,
   startOfWeek,
@@ -18,33 +21,46 @@ import { API } from "./helpers/api";
 import { UI } from "./helpers/ui";
 import { act, fireEvent, GlobalTestState, render, waitFor } from "./test-utils";
 
-import type { TimelineData } from "../timeline";
+import type { TimelineData, TimelineTask } from "../timeline";
 
 const { h } = window;
 
 const day = (value: string) => parseDay(value)!;
 
+const makeTask = (overrides: Partial<TimelineTask> = {}): TimelineTask => ({
+  id: "t",
+  name: "Task",
+  start: "2025-12-15",
+  duration: 1,
+  durationUnit: "days",
+  groupId: null,
+  color: "green",
+  tag: "",
+  ...overrides,
+});
+
 const makeData = (overrides: Partial<TimelineData> = {}): TimelineData => ({
   scale: "weeks",
   showToday: false,
   sketchy: false,
+  groups: [],
   tasks: [
-    {
+    // Monday 15th + 11 working days -> ends Monday 29th
+    makeTask({
       id: "t1",
       name: "Our second task",
       start: "2025-12-15",
-      end: "2025-12-29",
+      duration: 11,
       color: "yellow",
       tag: "Yellow",
-    },
-    {
+    }),
+    makeTask({
       id: "t2",
       name: "Our third task",
       start: "2025-12-11",
-      end: "2026-01-15",
+      duration: 26,
       color: "blue",
-      tag: "",
-    },
+    }),
   ],
   milestones: [{ id: "m1", name: "Deadline", date: "2025-12-30" }],
   ...overrides,
@@ -75,9 +91,11 @@ describe("timeline data", () => {
   it("reports task problems", () => {
     const [task] = makeData().tasks;
     expect(getTaskProblem(task)).toBeNull();
-    expect(getTaskProblem({ ...task, end: "" })).toBe("missingDates");
-    expect(getTaskProblem({ ...task, end: "2025-12-01" })).toBe(
-      "endBeforeStart",
+    expect(getTaskProblem({ ...task, start: "" })).toBe("missingStart");
+    expect(getTaskProblem({ ...task, duration: 0 })).toBe("invalidDuration");
+    expect(getTaskProblem({ ...task, duration: NaN })).toBe("invalidDuration");
+    expect(getTaskProblem({ ...task, duration: 100000 })).toBe(
+      "invalidDuration",
     );
   });
 
@@ -86,7 +104,9 @@ describe("timeline data", () => {
     expect(formatDay(range.start)).toBe("2025-12-08");
     expect(range.start).toBe(startOfWeek(range.start));
     expect(range.end).toBe(startOfWeek(range.end));
-    expect(range.end).toBeGreaterThan(day("2026-01-15"));
+    expect(range.end).toBeGreaterThan(
+      getTaskSchedule(makeData().tasks[1])!.lastDay,
+    );
   });
 
   it("refuses ranges that are far too long", () => {
@@ -119,7 +139,8 @@ describe("renderTimeline", () => {
       TIMELINE_LAYOUT.nameColumnWidth +
         (day("2025-12-15") - range.start) * dayWidth,
     );
-    // 15th to 29th inclusive = 15 days
+    // 11 working days from Monday 15th end on Monday 29th, so the bar
+    // covers the 15th to the 29th (15 calendar days, 2 weekends included)
     expect(bar.width).toBe(15 * dayWidth);
     expect(bar.boundElements).toEqual([{ type: "text", id: barText.id }]);
 
@@ -153,16 +174,7 @@ describe("renderTimeline", () => {
 
   it("still lists tasks without dates, but draws no bar", () => {
     const data = makeData({
-      tasks: [
-        {
-          id: "t",
-          name: "No dates yet",
-          start: "",
-          end: "",
-          color: "green",
-          tag: "",
-        },
-      ],
+      tasks: [makeTask({ name: "No dates yet", start: "" })],
     });
     const elements = renderTimeline(data, 0, 0, { today })!;
     expect(
@@ -178,16 +190,7 @@ describe("renderTimeline", () => {
   it("shows one label per day in the days scale", () => {
     const data = makeData({
       scale: "days",
-      tasks: [
-        {
-          id: "t",
-          name: "Short",
-          start: "2025-12-03",
-          end: "2025-12-05",
-          color: "green",
-          tag: "",
-        },
-      ],
+      tasks: [makeTask({ name: "Short", start: "2025-12-03", duration: 3 })],
       milestones: [],
     });
     const elements = renderTimeline(data, 0, 0, { today })!;
@@ -207,6 +210,173 @@ describe("renderTimeline", () => {
         .filter((el) => el.type === "ellipse")
         .map((el) => el.strokeColor),
     ).toContain("#fa5252");
+  });
+});
+
+describe("task estimates", () => {
+  const schedule = (task: Partial<TimelineTask>) => {
+    const result = getTaskSchedule(makeTask(task))!;
+    return {
+      start: formatDay(result.start),
+      lastDay: formatDay(result.lastDay),
+      length: result.end - result.start,
+    };
+  };
+
+  it("skips weekends when counting days", () => {
+    // Thursday + 3 days = Thu, Fri, Mon
+    expect(schedule({ start: "2025-12-18", duration: 3 })).toEqual({
+      start: "2025-12-18",
+      lastDay: "2025-12-22",
+      length: 5,
+    });
+    // a full working week ends on Friday
+    expect(schedule({ start: "2025-12-15", duration: 5 }).lastDay).toBe(
+      "2025-12-19",
+    );
+  });
+
+  it("moves a task that starts on a weekend to Monday", () => {
+    expect(schedule({ start: "2025-12-20", duration: 2 })).toEqual({
+      start: "2025-12-22",
+      lastDay: "2025-12-23",
+      length: 2,
+    });
+  });
+
+  it("turns hours into parts of a day (8 hours = 1 day)", () => {
+    expect(
+      schedule({ start: "2025-12-15", duration: 4, durationUnit: "hours" }),
+    ).toEqual({ start: "2025-12-15", lastDay: "2025-12-15", length: 0.5 });
+    // 12 hours from Friday = all of Friday + half of Monday
+    expect(
+      schedule({ start: "2025-12-19", duration: 12, durationUnit: "hours" }),
+    ).toEqual({ start: "2025-12-19", lastDay: "2025-12-22", length: 3.5 });
+  });
+
+  it("upgrades old timelines that were saved with an end date", () => {
+    const old = {
+      scale: "weeks",
+      showToday: true,
+      sketchy: false,
+      tasks: [
+        {
+          id: "t",
+          name: "Old",
+          start: "2025-12-15",
+          end: "2025-12-23",
+          color: "blue",
+          tag: "",
+        },
+      ],
+      milestones: [],
+    };
+    const data = normalizeTimelineData(old);
+    expect(data.groups).toEqual([]);
+    // Mon 15 to Tue 23 = 7 weekdays
+    expect(data.tasks[0]).toMatchObject({
+      duration: 7,
+      durationUnit: "days",
+      groupId: null,
+    });
+    expect(formatDay(getTaskSchedule(data.tasks[0])!.lastDay)).toBe(
+      "2025-12-23",
+    );
+  });
+});
+
+describe("timeline groups", () => {
+  const today = day("2025-12-01");
+  const data = makeData({
+    groups: [
+      { id: "g1", name: "Design", color: "violet" },
+      { id: "g2", name: "Empty group", color: "orange" },
+    ],
+    tasks: [
+      makeTask({ id: "a", name: "In group A", groupId: "g1", duration: 2 }),
+      makeTask({ id: "b", name: "No group", groupId: null }),
+      makeTask({
+        id: "c",
+        name: "In group B",
+        groupId: "g1",
+        start: "2025-12-22",
+        duration: 3,
+      }),
+    ],
+    milestones: [],
+  });
+
+  it("lists tasks without a group first, then each group with its tasks", () => {
+    expect(
+      getTimelineRows(data).map((row) =>
+        row.kind === "group" ? `[${row.group.name}]` : row.task.name,
+      ),
+    ).toEqual([
+      "No group",
+      "[Design]",
+      "In group A",
+      "In group B",
+      "[Empty group]",
+    ]);
+  });
+
+  it("draws each group as a lane with a colored border around its tasks", () => {
+    const elements = renderTimeline(data, 0, 0, { today })!;
+    const L = TIMELINE_LAYOUT;
+    for (const name of ["Design", "Empty group"]) {
+      expect(
+        elements.some((el) => el.type === "text" && el.text === name),
+      ).toBe(true);
+    }
+    const lanes = elements.filter((el) => el.customData?.timelineLane);
+    expect(lanes.map((lane) => lane.customData!.timelineLane)).toEqual([
+      "g1",
+      "g2",
+    ]);
+    // violet border, wide as the timeline
+    expect(lanes[0].strokeColor).toBe("#7950f2");
+    expect(lanes[0].strokeWidth).toBe(2);
+    expect(lanes[0].width).toBe(elements[0].width - 2 * L.lane.insetX);
+    // small corners, so they don't cut into the group's name
+    expect(lanes[0].roundness).toEqual({ type: 3, value: L.lane.radius });
+    // the "Design" lane holds its header row, its 2 tasks and some padding
+    expect(lanes[0].height).toBe(
+      L.groupRowHeight + 2 * L.rowHeight + L.lane.paddingBottom,
+    );
+    // the empty group's lane is just its header row and padding
+    expect(lanes[1].height).toBe(L.groupRowHeight + L.lane.paddingBottom);
+    // the first lane starts a gap below the "No group" task row
+    expect(lanes[0].y).toBe(
+      L.headerHeight + L.milestoneRowHeight + L.rowHeight + L.lane.gap,
+    );
+    // and the next lane starts a gap below the first one
+    expect(lanes[1].y).toBe(lanes[0].y + lanes[0].height + L.lane.gap);
+    // the group's name sits inside its lane, clear of the corner
+    const name = elements.find(
+      (el) => el.type === "text" && el.text === "Design",
+    )!;
+    expect(name.x).toBeGreaterThanOrEqual(lanes[0].x + L.lane.radius);
+    // no dark summary bars any more
+    expect(
+      elements.some((el) => el.type === "rectangle" && el.height === 8),
+    ).toBe(false);
+  });
+
+  it("gives old groups without a color one automatically", () => {
+    const upgraded = normalizeTimelineData({
+      ...data,
+      groups: [{ id: "g1", name: "Old" }],
+    });
+    expect(upgraded.groups[0].color).toBe("violet");
+  });
+
+  it("treats a task whose group was deleted as having no group", () => {
+    const rows = getTimelineRows({
+      ...data,
+      groups: [],
+    });
+    expect(rows.every((row) => row.kind === "task")).toBe(true);
+    expect(rows).toHaveLength(3);
   });
 });
 
@@ -258,6 +428,62 @@ describe("timeline dialog", () => {
     const timeline = h.elements.find((el) => getTimelineData(el))!;
     expect(timeline).toBeDefined();
     expect(getTimelineData(timeline)!.tasks).toHaveLength(defaultTasks + 1);
+  });
+
+  it("lets people add a group, put a task in it and estimate in hours", async () => {
+    const dialog = document.querySelector(".TimelineDialog")!;
+    const groupsBefore = dialog.querySelectorAll(
+      "[data-testid^='timeline-group-']",
+    ).length;
+    fireEvent.click(
+      dialog.querySelector("[data-testid='timeline-add-group']")!,
+    );
+    const groupInput = dialog.querySelector<HTMLInputElement>(
+      `[data-testid='timeline-group-${groupsBefore}'] input`,
+    )!;
+    fireEvent.change(groupInput, { target: { value: "QA" } });
+
+    const row = dialog.querySelector("[data-testid='timeline-task-0']")!;
+    const groupSelect = row.querySelector<HTMLSelectElement>(
+      ".TimelineDialog__group",
+    )!;
+    const qaOption = Array.from(groupSelect.options).find(
+      (option) => option.textContent === "QA",
+    )!;
+    fireEvent.change(groupSelect, { target: { value: qaOption.value } });
+    fireEvent.change(row.querySelector("input[type='date']")!, {
+      target: { value: "2025-12-19" },
+    });
+    fireEvent.change(row.querySelector("input[type='number']")!, {
+      target: { value: "12" },
+    });
+    fireEvent.change(row.querySelector(".TimelineDialog__estimate select")!, {
+      target: { value: "hours" },
+    });
+
+    // 12 hours from Friday 19th = Friday + half of Monday 22nd
+    expect(
+      dialog.querySelector("[data-testid='timeline-ends-0']")!.textContent,
+    ).toContain("22");
+
+    const insertButton = Array.from(dialog.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Insert"),
+    )!;
+    await act(async () => {
+      fireEvent.click(insertButton);
+    });
+    const data = getTimelineData(h.elements.find((el) => getTimelineData(el)))!;
+    const qa = data.groups.find((group) => group.name === "QA")!;
+    expect(qa).toBeDefined();
+    expect(data.tasks[0]).toMatchObject({
+      groupId: qa.id,
+      start: "2025-12-19",
+      duration: 12,
+      durationUnit: "hours",
+    });
+    expect(
+      h.elements.some((el) => el.type === "text" && el.text === "QA"),
+    ).toBe(true);
   });
 
   it("updates the selected timeline instead of adding a new one", async () => {
