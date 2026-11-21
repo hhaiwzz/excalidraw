@@ -336,15 +336,26 @@ describe("timeline groups", () => {
     // violet border, wide as the timeline
     expect(lanes[0].strokeColor).toBe("#7950f2");
     expect(lanes[0].strokeWidth).toBe(2);
-    expect(lanes[0].width).toBe(elements[0].width - 12);
-    // the "Design" lane holds its header row and its 2 tasks
-    expect(lanes[0].height).toBe(L.groupRowHeight + 2 * L.rowHeight - 6);
-    // the empty group's lane is just its header row
-    expect(lanes[1].height).toBe(L.groupRowHeight - 6);
-    // the lane starts below the "No group" task row
-    expect(lanes[0].y).toBe(
-      L.headerHeight + L.milestoneRowHeight + L.rowHeight + 3,
+    expect(lanes[0].width).toBe(elements[0].width - 2 * L.lane.insetX);
+    // small corners, so they don't cut into the group's name
+    expect(lanes[0].roundness).toEqual({ type: 3, value: L.lane.radius });
+    // the "Design" lane holds its header row, its 2 tasks and some padding
+    expect(lanes[0].height).toBe(
+      L.groupRowHeight + 2 * L.rowHeight + L.lane.paddingBottom,
     );
+    // the empty group's lane is just its header row and padding
+    expect(lanes[1].height).toBe(L.groupRowHeight + L.lane.paddingBottom);
+    // the first lane starts a gap below the "No group" task row
+    expect(lanes[0].y).toBe(
+      L.headerHeight + L.milestoneRowHeight + L.rowHeight + L.lane.gap,
+    );
+    // and the next lane starts a gap below the first one
+    expect(lanes[1].y).toBe(lanes[0].y + lanes[0].height + L.lane.gap);
+    // the group's name sits inside its lane, clear of the corner
+    const name = elements.find(
+      (el) => el.type === "text" && el.text === "Design",
+    )!;
+    expect(name.x).toBeGreaterThanOrEqual(lanes[0].x + L.lane.radius);
     // no dark summary bars any more
     expect(
       elements.some((el) => el.type === "rectangle" && el.height === 8),

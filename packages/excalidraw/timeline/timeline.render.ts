@@ -58,7 +58,19 @@ export const TIMELINE_LAYOUT = {
   rowHeight: 48,
   groupRowHeight: 40,
   /** how far task names inside a group are pushed right */
-  groupIndent: 18,
+  groupIndent: 16,
+  /** where names start, measured from the timeline's left edge */
+  textLeft: 24,
+  lane: {
+    /** empty space above each lane, so lanes don't touch */
+    gap: 14,
+    /** empty space inside a lane, below its last task */
+    paddingBottom: 10,
+    /** distance from the timeline's left and right edges */
+    insetX: 8,
+    /** small corner radius so the corner never runs into the text */
+    radius: 12,
+  },
   barHeight: 34,
   bottomPadding: 24,
   dayWidth: { weeks: 18, days: 44 } as Record<TimelineScale, number>,
@@ -315,6 +327,52 @@ export const getTimelineRows = (data: TimelineData): TimelineRow[] => {
 };
 
 /**
+ * Works out where each row sits (relative to the first row) and where each
+ * group's lane ends. Lanes get a gap above them and some padding below
+ * their last task, so groups never touch each other or nearby tasks.
+ */
+const layoutRows = (rows: TimelineRow[]) => {
+  const L = TIMELINE_LAYOUT;
+  const rowTops: number[] = [];
+  const rowHeights: number[] = [];
+  /** for group rows: where the lane ends; undefined for task rows */
+  const laneBottoms: (number | undefined)[] = [];
+  let cursor = 0;
+  let openLaneIndex: number | null = null;
+
+  const closeLane = () => {
+    if (openLaneIndex !== null) {
+      cursor += L.lane.paddingBottom;
+      laneBottoms[openLaneIndex] = cursor;
+      openLaneIndex = null;
+    }
+  };
+
+  rows.forEach((row, index) => {
+    if (row.kind === "group") {
+      closeLane();
+      cursor += L.lane.gap;
+      openLaneIndex = index;
+      rowTops.push(cursor);
+      rowHeights.push(L.groupRowHeight);
+      laneBottoms.push(undefined);
+      cursor += L.groupRowHeight;
+      return;
+    }
+    if (!row.inGroup) {
+      closeLane();
+    }
+    rowTops.push(cursor);
+    rowHeights.push(L.rowHeight);
+    laneBottoms.push(undefined);
+    cursor += L.rowHeight;
+  });
+  closeLane();
+
+  return { rowTops, rowHeights, laneBottoms, rowsHeight: cursor };
+};
+
+/**
  * Turns timeline data into plain Excalidraw elements (rectangles, text,
  * lines, diamonds) that are grouped together. Because they're normal
  * elements, people can move, resize, recolor or rename anything afterwards.
@@ -357,10 +415,7 @@ export const renderTimeline = (
   const bodyY = y + L.headerHeight;
   const rowsY = bodyY + L.milestoneRowHeight;
   const rows = getTimelineRows(data);
-  const rowHeights = rows.map((row) =>
-    row.kind === "group" ? L.groupRowHeight : L.rowHeight,
-  );
-  const rowsHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+  const { rowTops, rowHeights, laneBottoms, rowsHeight } = layoutRows(rows);
   const height =
     L.headerHeight +
     L.milestoneRowHeight +
@@ -447,7 +502,7 @@ export const renderTimeline = (
   labels.push(
     makeText(style, {
       text: data.scale === "weeks" ? words.weeks : words.days,
-      x: x + 16,
+      x: x + L.textLeft,
       y: y + L.headerHeight / 2,
       fontSize: FONT_SIZE.label,
       color: MUTED_TEXT_COLOR,
@@ -544,7 +599,7 @@ export const renderTimeline = (
   labels.push(
     makeText(style, {
       text: words.taskCount(data.tasks.length),
-      x: x + 16,
+      x: x + L.textLeft,
       y: bodyY + L.milestoneRowHeight / 2,
       fontSize: FONT_SIZE.label,
       color: MUTED_TEXT_COLOR,
@@ -553,42 +608,44 @@ export const renderTimeline = (
   );
 
   const groupBands: ExcalidrawElement[] = [];
-  let rowTop = rowsY;
   rows.forEach((row, index) => {
     const rowHeight = rowHeights[index];
-    const rowCenterY = rowTop + rowHeight / 2;
-    rowTop += rowHeight;
+    const rowCenterY = rowsY + rowTops[index] + rowHeight / 2;
 
     if (row.kind === "group") {
       // a "lane": a box with a colored border around the group's name and
       // all of its tasks, stretching across the whole timeline
       const shades = COLOR_PALETTE[row.group.color] ?? COLOR_PALETTE.gray;
-      const laneTop = rowCenterY - rowHeight / 2 + 3;
-      const laneHeight = rowHeight + row.tasks.length * L.rowHeight - 6;
+      const laneTop = rowsY + rowTops[index];
+      const laneHeight = laneBottoms[index]! - rowTops[index];
+      const laneRoundness = {
+        type: ROUNDNESS.ADAPTIVE_RADIUS,
+        value: L.lane.radius,
+      };
       groupBands.push(
         newElement({
           ...baseProps(style),
           type: "rectangle",
-          x: x + 6,
+          x: x + L.lane.insetX,
           y: laneTop,
-          width: width - 12,
+          width: width - L.lane.insetX * 2,
           height: laneHeight,
           strokeColor: "transparent",
           backgroundColor: shades[0],
           opacity: 70,
-          roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+          roundness: laneRoundness,
         }),
         newElement({
           ...baseProps(style),
           type: "rectangle",
-          x: x + 6,
+          x: x + L.lane.insetX,
           y: laneTop,
-          width: width - 12,
+          width: width - L.lane.insetX * 2,
           height: laneHeight,
           strokeColor: shades[3],
           strokeWidth: 2,
           backgroundColor: "transparent",
-          roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+          roundness: laneRoundness,
           customData: { timelineLane: row.group.id },
         }),
       );
@@ -596,12 +653,12 @@ export const renderTimeline = (
         makeText(style, {
           text: truncate(
             row.group.name.trim() || " ",
-            L.nameColumnWidth - 32,
+            L.nameColumnWidth - L.textLeft - 16,
             FONT_SIZE.title,
             style.fontFamily,
             renderEnvironment,
           ),
-          x: x + 16,
+          x: x + L.textLeft,
           y: rowCenterY,
           fontSize: FONT_SIZE.title,
           color: shades[4],
@@ -618,12 +675,12 @@ export const renderTimeline = (
         makeText(style, {
           text: truncate(
             task.name.trim(),
-            L.nameColumnWidth - 32 - indent,
+            L.nameColumnWidth - L.textLeft - 16 - indent,
             inGroup ? FONT_SIZE.label : FONT_SIZE.title,
             style.fontFamily,
             renderEnvironment,
           ),
-          x: x + 16 + indent,
+          x: x + L.textLeft + indent,
           y: rowCenterY,
           fontSize: inGroup ? FONT_SIZE.label : FONT_SIZE.title,
           color: inGroup ? COLOR_PALETTE.gray[4] : TEXT_COLOR,
