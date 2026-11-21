@@ -579,6 +579,7 @@ export const EDITOR_LS_KEYS = {
   // legacy naming (non)scheme
   MERMAID_TO_EXCALIDRAW: "mermaid-to-excalidraw",
   PUBLISH_LIBRARY: "publish-library-data",
+  TIMELINE: "excalidraw-timeline",
   // TEMPORARY (see MinimapAnnouncementDot)
   MINIMAP_ANNOUNCEMENT_DISMISSED: "excalidraw-minimap-announcement-dismissed",
 } as const;

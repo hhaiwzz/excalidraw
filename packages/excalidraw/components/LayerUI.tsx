@@ -35,6 +35,7 @@ import {
 import { SelectedShapeActions, CompactShapeActions } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
 import { MobileMenu } from "./MobileMenu";
+import { TimelineDialog } from "./TimelineDialog";
 import { PasteChartDialog } from "./PasteChartDialog";
 import { Section } from "./Section";
 import Stack from "./Stack";
@@ -619,6 +620,15 @@ const LayerUI = ({
       <tunnels.OverwriteConfirmDialogTunnel.Out />
       {renderImageExportDialog()}
       {renderJSONExportDialog()}
+      {defaultUIEnabled && appState.openDialog?.name === "timeline" && (
+        <TimelineDialog
+          onClose={() =>
+            setAppState({
+              openDialog: null,
+            })
+          }
+        />
+      )}
       {defaultUIEnabled && appState.openDialog?.name === "charts" && (
         <PasteChartDialog
           data={appState.openDialog.data}

@@ -139,6 +139,67 @@ exports[`contextMenu element > right-clicking on a group should select whole gro
       },
       "separator",
       {
+        "icon": <svg
+          aria-hidden="true"
+          className=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <g
+            strokeWidth="1.5"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+              stroke="none"
+            />
+            <path
+              d="M4 4v16"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="8"
+              x="7"
+              y="5"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="10"
+              x="10"
+              y="10.25"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="6"
+              x="7"
+              y="15.5"
+            />
+          </g>
+        </svg>,
+        "keywords": [
+          "timeline",
+          "gantt",
+          "edit",
+        ],
+        "label": "labels.editTimeline",
+        "name": "editTimeline",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+        "viewMode": false,
+      },
+      {
         "PanelComponent": [Function],
         "icon": <svg
           aria-hidden="true"
@@ -4999,6 +5060,67 @@ exports[`contextMenu element > shows 'Group selection' in context menu for multi
       },
       "separator",
       {
+        "icon": <svg
+          aria-hidden="true"
+          className=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <g
+            strokeWidth="1.5"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+              stroke="none"
+            />
+            <path
+              d="M4 4v16"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="8"
+              x="7"
+              y="5"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="10"
+              x="10"
+              y="10.25"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="6"
+              x="7"
+              y="15.5"
+            />
+          </g>
+        </svg>,
+        "keywords": [
+          "timeline",
+          "gantt",
+          "edit",
+        ],
+        "label": "labels.editTimeline",
+        "name": "editTimeline",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+        "viewMode": false,
+      },
+      {
         "PanelComponent": [Function],
         "icon": <svg
           aria-hidden="true"
@@ -6234,6 +6356,67 @@ exports[`contextMenu element > shows 'Ungroup selection' in context menu for gro
         },
       },
       "separator",
+      {
+        "icon": <svg
+          aria-hidden="true"
+          className=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <g
+            strokeWidth="1.5"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+              stroke="none"
+            />
+            <path
+              d="M4 4v16"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="8"
+              x="7"
+              y="5"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="10"
+              x="10"
+              y="10.25"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="6"
+              x="7"
+              y="15.5"
+            />
+          </g>
+        </svg>,
+        "keywords": [
+          "timeline",
+          "gantt",
+          "edit",
+        ],
+        "label": "labels.editTimeline",
+        "name": "editTimeline",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+        "viewMode": false,
+      },
       {
         "PanelComponent": [Function],
         "icon": <svg
@@ -8276,6 +8459,67 @@ exports[`contextMenu element > shows context menu for element > [end of test] ap
       },
       "separator",
       {
+        "icon": <svg
+          aria-hidden="true"
+          className=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <g
+            strokeWidth="1.5"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+              stroke="none"
+            />
+            <path
+              d="M4 4v16"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="8"
+              x="7"
+              y="5"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="10"
+              x="10"
+              y="10.25"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="6"
+              x="7"
+              y="15.5"
+            />
+          </g>
+        </svg>,
+        "keywords": [
+          "timeline",
+          "gantt",
+          "edit",
+        ],
+        "label": "labels.editTimeline",
+        "name": "editTimeline",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+        "viewMode": false,
+      },
+      {
         "PanelComponent": [Function],
         "icon": <svg
           aria-hidden="true"
@@ -9281,6 +9525,67 @@ exports[`contextMenu element > shows context menu for element > [end of test] ap
         },
       },
       "separator",
+      {
+        "icon": <svg
+          aria-hidden="true"
+          className=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <g
+            strokeWidth="1.5"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+              stroke="none"
+            />
+            <path
+              d="M4 4v16"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="8"
+              x="7"
+              y="5"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="10"
+              x="10"
+              y="10.25"
+            />
+            <rect
+              height="3.5"
+              rx="1"
+              width="6"
+              x="7"
+              y="15.5"
+            />
+          </g>
+        </svg>,
+        "keywords": [
+          "timeline",
+          "gantt",
+          "edit",
+        ],
+        "label": "labels.editTimeline",
+        "name": "editTimeline",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+        "viewMode": false,
+      },
       {
         "PanelComponent": [Function],
         "icon": <svg

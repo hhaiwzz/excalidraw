@@ -23,6 +23,7 @@ import {
   bucketFillIcon,
   MagicIcon,
   mermaidLogoIcon,
+  timelineIcon,
   DotsIcon,
 } from "./icons";
 import {
@@ -202,6 +203,13 @@ const ExtraToolsDropdown = ({
           data-testid="toolbar-embeddable"
         >
           {t("toolBar.mermaidToExcalidraw")}
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          onSelect={() => app.setOpenDialog({ name: "timeline" })}
+          icon={timelineIcon}
+          data-testid="toolbar-timeline"
+        >
+          {t("toolBar.timeline")}
         </DropdownMenu.Item>
         {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
           <DropdownMenu.Item

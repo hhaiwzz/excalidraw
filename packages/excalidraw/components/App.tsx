@@ -282,6 +282,7 @@ import {
   actionToggleArrowBinding,
   actionToggleMidpointSnapping,
   actionToggleCropEditor,
+  actionEditTimeline,
 } from "../actions";
 import { actionWrapTextInContainer } from "../actions/actionBoundText";
 import { actionPaste } from "../actions/actionClipboard";
@@ -11298,6 +11299,7 @@ class App extends React.Component<AppProps, AppState> {
       actionRemoveAllElementsFromFrame,
       actionWrapSelectionInFrame,
       CONTEXT_MENU_SEPARATOR,
+      actionEditTimeline,
       actionToggleCropEditor,
       CONTEXT_MENU_SEPARATOR,
       ...options,

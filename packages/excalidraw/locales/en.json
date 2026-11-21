@@ -206,7 +206,8 @@
     "showHints": "Toolbar hints",
     "inputDevice": "Input",
     "inputDeviceTrackpad": "Trackpad",
-    "inputDeviceMouse": "Mouse"
+    "inputDeviceMouse": "Mouse",
+    "editTimeline": "Edit timeline"
   },
   "elementLink": {
     "title": "Link to object",
@@ -353,7 +354,8 @@
     "hand": "Hand (panning tool)",
     "extraTools": "More tools",
     "mermaidToExcalidraw": "Mermaid to Excalidraw",
-    "convertElementType": "Toggle shape type"
+    "convertElementType": "Toggle shape type",
+    "timeline": "Timeline"
   },
   "bucketfill": {
     "noRegion": "Couldn't find an enclosed region to fill here.",
@@ -796,5 +798,35 @@
     "excalidrawPlusMcp": "Excalidraw+ MCP",
     "cli": "Excalidraw CLI",
     "cliTagline": "for humans & AI"
+  },
+  "timelineDialog": {
+    "title": "Timeline",
+    "intro": "List your tasks with start and end dates. You can move, resize or rename anything once it's on the canvas.",
+    "scale": "Show",
+    "weeks": "Weeks",
+    "days": "Days",
+    "showToday": "Mark today",
+    "sketchy": "Hand-drawn look",
+    "tasks": "Tasks",
+    "milestones": "Milestones",
+    "addTask": "Add task",
+    "addMilestone": "Add milestone",
+    "taskName": "Task name",
+    "milestoneName": "Milestone name",
+    "start": "Start",
+    "end": "End",
+    "date": "Date",
+    "tag": "Tag",
+    "color": "Color",
+    "remove": "Remove",
+    "insert": "Insert",
+    "update": "Update timeline",
+    "preview": "Preview",
+    "missingDates": "Pick a start and an end date",
+    "endBeforeStart": "End date is before the start date",
+    "tooLong": "The timeline is too long. Keep it under 3 years.",
+    "editHint": "Editing the selected timeline. Updating redraws it, so changes made by hand on the canvas will be replaced.",
+    "taskCount_one": "{{count}} task",
+    "taskCount_other": "{{count}} tasks"
   }
 }

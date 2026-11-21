@@ -2005,6 +2005,18 @@ export const mermaidLogoIcon = createIcon(
   />,
 );
 
+// timeline: three staggered bars, like a small Gantt chart
+export const timelineIcon = createIcon(
+  <g strokeWidth="1.5">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M4 4v16" />
+    <rect x="7" y="5" width="8" height="3.5" rx="1" />
+    <rect x="10" y="10.25" width="10" height="3.5" rx="1" />
+    <rect x="7" y="15.5" width="6" height="3.5" rx="1" />
+  </g>,
+  tablerIconProps,
+);
+
 // tabler-icons: refresh
 export const RetryIcon = createIcon(
   <g strokeWidth="1.5">
